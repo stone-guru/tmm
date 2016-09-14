@@ -1,0 +1,12 @@
+
+from scrapy.spider import BaseSpider
+from scrapy.selector import Selector
+
+class BriefSpider(BaseSpider):
+    name = "Brief"
+    allowed_domains = []
+    start_urls = ["https://mm.taobao.com/json/request_top_list.htm?page=10"]
+
+    def parse(self, response):
+        sel = Selector(response)
+        
