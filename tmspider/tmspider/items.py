@@ -7,7 +7,6 @@
 
 import scrapy
 
-
 class ModelBrief:
      def __init__(self):
         self.uid = ""
@@ -31,3 +30,12 @@ class TmmItem(scrapy.Item):
      cup = scrapy.Field()
      height = scrapy.Field()
      weight = scrapy.Field()
+     itemType = scrapy.Field()
+ 
+class ImageItem(scrapy.Item):
+     uid = scrapy.Field()
+     name = scrapy.Field()
+     imageBytes = scrapy.Field()
+     suffix = scrapy.Field()
+     index = scrapy.Field()
+     itemType = scrapy.Field()

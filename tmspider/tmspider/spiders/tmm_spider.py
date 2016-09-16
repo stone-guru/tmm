@@ -1,8 +1,10 @@
 
 from tmspider.items import TmmItem
+from tmspider.items import ImageItem
 from tmspider.items import ModelBrief
 from scrapy.spiders import BaseSpider
 from scrapy.selector import Selector
+from scrapy.settings import Settings
 import scrapy
 import re
 import json
@@ -10,10 +12,24 @@ import json
 class TmmSpider(BaseSpider):
     name = "TmmSpider"
     allowed_domains = []
-    start_urls = ["https://mm.taobao.com/json/request_top_list.htm?page=10"]
-    
+    start_urls = []
+
+    iStart = 1
+    iEnd = 1
+    iPage = 1
+    modelListUrl = "https://mm.taobao.com/json/request_top_list.htm?page="
     detailUrl = "https://mm.taobao.com/self/info/model_info_show.htm?user_id="
-    
+    nImagePerModel = 2
+
+    def __init__(self, start, end):
+        super(TmmSpider, self).__init__()
+
+        self.iStart = int(start)
+        self.iEnd = int(end)
+        self.iPage = self.iStart
+        self.start_urls = [self.modelListUrl + str(self.iStart)]
+        print("Fetch mm from page {} to page {}".format(self.iStart, self.iEnd))
+        
     def parse(self, response):
         sel = Selector(response)
         for isel in sel.css('.list-item'):
@@ -23,18 +39,23 @@ class TmmSpider(BaseSpider):
             brief.age = topSel.xpath('./em/strong/text()').extract_first()
             brief.name = topSel.xpath("./a/text()").extract_first()
             brief.photoUrl = "https:" + isel.css(".w610").xpath("./a/@href").extract_first()
-            
+
             detailReq = scrapy.Request(self.detailUrl + brief.uid, callback = self.parseDetail)
             detailReq.meta["Brief"] = brief
             yield detailReq
 
-            photoReq = scrapy.Request(brief.photoUrl, callback = self.parsePhotoImage)
-            photoReq.meta["Brief"] = brief
-            yield photoReq
-            
+            photoPageReq = scrapy.Request(brief.photoUrl, callback = self.parsePhotoPage)
+            photoPageReq.meta["Brief"] = brief
+            yield photoPageReq
+
+        self.iPage += 1
+        if self.iPage <= self.iEnd:
+            yield scrapy.Request(self.modelListUrl + str(self.iPage), callback = self.parse)
+
     def parseDetail(self, response):
         brief = response.meta["Brief"]
         item = TmmItem()
+        item["itemType"] = "modelInfo"
         item["uid"] = brief.uid
         item["name"] = brief.name
         info = response.selector.css(".mm-p-base-info ul")
@@ -51,14 +72,35 @@ class TmmSpider(BaseSpider):
 
         yield item
 
-
-    def parsePhotoImage(self, response):
+    def parsePhotoPage(self, response):
         s = response.selector.xpath('//input[@id="J_MmPicListId"]/@value').extract_first()
         images = json.loads(s)
-        for i in range(1, 4):
+        i = 0
+        while (i < self.nImagePerModel and i < len(images)):
             image = images[i]
-            print(image["bigUrl"])
-    
+            imageReq = scrapy.Request("https:" + image["bigUrl"], self.fetchImage)
+            imageReq.meta["Brief"] = response.meta["Brief"]
+            imageReq.meta["index"] = i + 1
+            i += 1
+            yield imageReq
+
+    def fetchImage(self, response):
+        def suffixOfImage(url):
+            m = re.search("(\.[a-z0-9]+)_\d", url)
+            return (m.group(1) if m else ".jpg")
+
+        brief = response.meta["Brief"]
+        imageBytes = response.body
+        print("Got image for {} {}, image size is {}.".format(brief.uid, brief.name, len(imageBytes)))
+        item = ImageItem()
+        item["itemType"] = "modelImage"
+        item["uid"] = brief.uid
+        item["name"] = brief.name
+        item["imageBytes"] = imageBytes
+        item["suffix"] = suffixOfImage(response.url)
+        item["index"] = response.meta["index"]
+        yield item
+
     def parseCup(self, s):
         c = s.upper()[-1]
         if c.isalpha():
@@ -69,7 +111,7 @@ class TmmSpider(BaseSpider):
         if s.upper().endswith(unit):
             return float(s[:-len(unit)])
         return float(s)
-    
+
     def parseBirthDate(self, age, s):
         y = 2016 - age + 1
         m1 = re.search("(\d+)\W*月\W*(\d+)日", s)
@@ -77,4 +119,3 @@ class TmmSpider(BaseSpider):
             return str(y)
         else:
             return "{}-{}-{}".format(y, int(m1.group(1)), int(m1.group(2)))
-
