@@ -27,3 +27,4 @@ class TmmSpiderPipeline(object):
             f.write(imageBytes)
         # return item
         pass
+
