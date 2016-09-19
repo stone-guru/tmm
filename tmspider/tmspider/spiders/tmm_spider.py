@@ -2,14 +2,15 @@
 from tmspider.items import TmmItem
 from tmspider.items import ImageItem
 from tmspider.items import ModelBrief
-from scrapy.spiders import BaseSpider
+from scrapy.spiders import Spider
 from scrapy.selector import Selector
-from scrapy.settings import Settings
+# from scrapy.settings import Settings
 import scrapy
 import re
 import json
 
-class TmmSpider(BaseSpider):
+
+class TmmSpider(Spider):
     name = "TmmSpider"
     allowed_domains = []
     start_urls = []
@@ -35,22 +36,22 @@ class TmmSpider(BaseSpider):
         for isel in sel.css('.list-item'):
             topSel = isel.css(".top")
             brief = ModelBrief()
-            brief.uid= topSel.css(".friend-follow").xpath("./@data-userid").extract_first()
+            brief.uid = topSel.css(".friend-follow").xpath("./@data-userid").extract_first()
             brief.age = topSel.xpath('./em/strong/text()').extract_first()
             brief.name = topSel.xpath("./a/text()").extract_first()
             brief.photoUrl = "https:" + isel.css(".w610").xpath("./a/@href").extract_first()
 
-            detailReq = scrapy.Request(self.detailUrl + brief.uid, callback = self.parseDetail)
+            detailReq = scrapy.Request(self.detailUrl + brief.uid, callback=self.parseDetail)
             detailReq.meta["Brief"] = brief
             yield detailReq
 
-            photoPageReq = scrapy.Request(brief.photoUrl, callback = self.parsePhotoPage)
+            photoPageReq = scrapy.Request(brief.photoUrl, callback=self.parsePhotoPage)
             photoPageReq.meta["Brief"] = brief
             yield photoPageReq
 
         self.iPage += 1
         if self.iPage <= self.iEnd:
-            yield scrapy.Request(self.modelListUrl + str(self.iPage), callback = self.parse)
+            yield scrapy.Request(self.modelListUrl + str(self.iPage), callback=self.parse)
 
     def parseDetail(self, response):
         brief = response.meta["Brief"]
@@ -61,9 +62,9 @@ class TmmSpider(BaseSpider):
         info = response.selector.css(".mm-p-base-info ul")
         item["city"] = info.css("li:nth-child(3) span::text").extract_first().strip()
         item["birthDate"] = self.parseBirthDate(int(brief.age),
-                                                info.css("li:nth-child(2) span::text").extract_first().strip())
-        item["height"] = self.parseMeter(info.css(".mm-p-height p::text").extract_first().strip(), "CM")
-        item["weight"] = self.parseMeter(info.css(".mm-p-weight p::text").extract_first().strip(), "KG")
+                                                info.css("li:nth-child(2) span::text").extract_first())
+        item["height"] = self.parseMeter(info.css(".mm-p-height p::text").extract_first(), "CM")
+        item["weight"] = self.parseMeter(info.css(".mm-p-weight p::text").extract_first(), "KG")
         msize = info.css(".mm-p-size p::text").extract_first().strip().split("-")
         item["waist"] = float(msize[0])
         item["bust"] = float(msize[1])
@@ -85,10 +86,6 @@ class TmmSpider(BaseSpider):
             yield imageReq
 
     def fetchImage(self, response):
-        def suffixOfImage(url):
-            m = re.search("(\.[a-z0-9]+)_\d", url)
-            return (m.group(1) if m else ".jpg")
-
         brief = response.meta["Brief"]
         imageBytes = response.body
         print("Got image for {} {}, image size is {}.".format(brief.uid, brief.name, len(imageBytes)))
@@ -97,7 +94,6 @@ class TmmSpider(BaseSpider):
         item["uid"] = brief.uid
         item["name"] = brief.name
         item["imageBytes"] = imageBytes
-        item["suffix"] = suffixOfImage(response.url)
         item["index"] = response.meta["index"]
         yield item
 
@@ -107,7 +103,8 @@ class TmmSpider(BaseSpider):
             return c
         return None
 
-    def parseMeter(self, s, unit):
+    def parseMeter(self, t, unit):
+        s = t.strip()
         if s.upper().endswith(unit):
             return float(s[:-len(unit)])
         return float(s)
