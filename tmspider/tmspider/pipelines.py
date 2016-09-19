@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from tmspider.db.pgdao import PgDao
+
 import re
 from pathlib import Path 
 
@@ -6,7 +8,11 @@ from scrapy.exceptions import DropItem
 
 class TmmSpiderPipeline(object):
     imageDir = Path("/home/bison/Pictures/tmm")
+    dao = None
     
+    def __init__(self):
+        self.dao = PgDao()
+        
     def process_item(self, item, spider):
         if item["itemType"] == "modelInfo":
             return self.processModelInfo(item)
@@ -16,6 +22,7 @@ class TmmSpiderPipeline(object):
             raise DropItem("unknown type Item")
 
     def processModelInfo(self, item):
+        self.dao.saveModelItem(item)
         return item
 
     def processModelImage(self, item):

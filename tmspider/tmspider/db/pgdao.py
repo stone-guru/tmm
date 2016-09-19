@@ -5,21 +5,24 @@ import psycopg2
 class PgDao:
     conn = None
     cursor = None
+    stage = 1
     def __init__(self):
         self.conn = psycopg2.connect(host = "localhost", database = "tmm", user = "bison", password = "timeismoney")
+        self.conn.autocommit = True
         self.cursor = self.conn.cursor()
-
+        self.stage = self.getAndIncStageNum()
+        
     def close(self):
         self.cursor.close()
         self.conn.close()
     
     def getAndIncStageNum(self):
-        self.cursor.execute("select NEXT_STAGE from STAGE_NUM;")
+        self.cursor.callproc("f_stage_num")
         sn = self.cursor.fetchone()[0]
-        self.cursor.execute("update STAGE_NUM set NEXT_STAGE = NEXT_STAGE + 1");
-        self.conn.commit()
         return sn
 
     def saveModelItem(self, item):
-        pass
+        self.cursor.callproc("insert_model",
+                             [self.stage, item['uid'], item['name'], item['birthDate'], item['height'],
+                              item['weight'], item['waist'], item['bust'], item['hip'], item['cup']])
     
